@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>AI Crop Recommendation — Prototype</title>
+  <style>
+    :root{
+      --bg:#f3faf2; --card:#ffffff; --accent:#2f855a; --muted:#6b7280;
+      --glass: rgba(255,255,255,0.6);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    }
+    body{ margin:0; background:linear-gradient(180deg,#ecfdf5, #f8fafc); color:#0f172a; }
+    .container{ max-width:980px; margin:28px auto; padding:20px; }
+    .header{ display:flex; align-items:center; gap:16px; }
+    .logo{ width:64px; height:64px; border-radius:12px; background:linear-gradient(135deg,var(--accent),#38a169); display:flex; align-items:center; justify-content:center; color:white; font-weight:700; font-size:22px; }
+    h1{ margin:0; font-size:20px; }
+    p.lead{ margin:4px 0 18px; color:var(--muted); }
+
+    .grid{ display:grid; grid-template-columns: 1fr 360px; gap:18px; align-items:start; }
+    @media (max-width:880px){ .grid{ grid-template-columns:1fr; } .right{ order: -1; } }
+
+    .card{ background:var(--card); border-radius:12px; padding:16px; box-shadow:0 6px 18px rgba(15,23,42,0.06); }
+    label{ display:block; margin-bottom:6px; font-size:13px; color:var(--muted); }
+    input[type=number], select{ width:100%; padding:10px 12px; border-radius:8px; border:1px solid #e6edf3; font-size:15px; outline:none; box-sizing:border-box; }
+    input[type=number]:focus, select:focus{ box-shadow:0 0 0 4px rgba(72,187,120,0.08); border-color:#48bb78; }
+    .row{ display:flex; gap:10px; }
+    .col{ flex:1; }
+
+    button.primary{ background:var(--accent); color:white; border:none; padding:10px 14px; border-radius:10px; cursor:pointer; font-weight:600; }
+    button.ghost{ background:transparent; border:1px solid #e6edf3; padding:10px 12px; border-radius:10px; cursor:pointer; }
+
+    .result-list{ margin-top:10px; display:flex; flex-direction:column; gap:10px; }
+    .result{ border-radius:10px; padding:12px; display:flex; gap:12px; align-items:flex-start; background:linear-gradient(180deg,#f8fffa,#ffffff); border:1px solid rgba(72,187,120,0.08); }
+    .score{ width:62px; height:62px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-weight:700; color:var(--accent); background:rgba(72,187,120,0.08); font-size:16px; }
+    .crop-title{ font-weight:700; margin:0; }
+    .reason{ margin:4px 0 0; color:var(--muted); font-size:13px; }
+
+    .notes{ font-size:13px; color:var(--muted); margin-top:12px; }
+    .small{ font-size:12px; color:#9ca3af; margin-top:8px; }
+
+    footer{ margin-top:18px; color:var(--muted); font-size:13px; text-align:center; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">Ag</div>
+      <div>
+        <h1>AI Crop Recommendation — Prototype</h1>
+        <p class="lead">Enter soil & field info below. This local prototype uses simple heuristics to produce top-3 crop recommendations and short reasons. Replace with a model/API later.</p>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="left card">
+        <form id="form" onsubmit="return false;">
+          <div class="row">
+            <div class="col">
+              <label for="nitrogen">Nitrogen (N) — mg/kg</label>
+              <input id="nitrogen" type="number" min="0" step="0.1" value="120" />
+            </div>
+            <div class="col">
+              <label for="phosphorus">Phosphorus (P) — mg/kg</label>
+              <input id="phosphorus" type="number" min="0" step="0.1" value="30" />
+            </div>
+            <div class="col">
+              <label for="potassium">Potassium (K) — mg/kg</label>
+              <input id="potassium" type="number" min="0" step="0.1" value="180" />
+            </div>
+          </div>
+
+          <div style="margin-top:12px;">
+            <label for="ph">Soil pH</label>
+            <input id="ph" type="number" min="3" max="10" step="0.1" value="6.2" />
+          </div>
+
+          <div style="margin-top:12px;" class="row">
+            <div class="col">
+              <label for="water">Water availability</label>
+              <select id="water">
+                <option value="low">Low</option>
+                <option value="moderate" selected>Moderate</option>
+                <option value="high">High</option>
+              </select>
+            </div>
+            <div class="col">
+              <label for="season">Season / Month</label>
+              <select id="season">
+                <option value="summer">Summer</option>
+                <option value="rainy">Rainy</option>
+                <option value="winter">Winter</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="display:flex; gap:10px; margin-top:14px;">
+            <button class="primary" id="runBtn">Get Recommendations</button>
+            <button class="ghost" id="clearBtn" type="button">Reset</button>
+          </div>
+
+          <div class="small">Tip: This is a POC. For production, plug this UI into a backend model API that returns probs, reasons, and model_version.</div>
+        </form>
+
+        <div id="explain" class="notes"></div>
+      </div>
+
+      <div class="right card">
+        <h3 style="margin-top:0;margin-bottom:8px;">Top Recommendations</h3>
+        <div id="results" class="result-list">
+          <!-- results appear here -->
+        </div>
+
+        <div id="more" style="margin-top:12px;">
+          <h4 style="margin:8px 0 6px;">How recommendations are scored</h4>
+          <p class="small">This demo computes simple heuristic scores from soil pH, nutrients, water and season. Scores are for guidance only.</p>
+        </div>
+      </div>
+    </div>
+
+    <footer>Prototype • Not a substitute for local agronomy advice • Always consult extension services.</footer>
+  </div>
+
+<script>
+  // Simple rule-based recommender with heuristic scoring.
+  const crops = [
+    { id: 'wheat', name: 'Wheat' },
+    { id: 'rice', name: 'Rice' },
+    { id: 'maize', name: 'Maize' },
+    { id: 'millets', name: 'Millets' },
+    { id: 'groundnut', name: 'Groundnut' },
+    { id: 'sorghum', name: 'Sorghum' }
+  ];
+
+  function scoreForCrop(crop, features) {
+    // features: {n, p, k, ph, water, season}
+    let score = 0;
+    let reasons = [];
+
+    // baseline
+    score += 0.2;
+
+    // pH suitability
+    if (crop === 'wheat') {
+      if (features.ph >= 6 && features.ph <= 7.5) { score += 0.25; reasons.push("pH neutral (6–7.5) suits wheat"); }
+      if (features.n > 90) { score += 0.2; reasons.push("high Nitrogen favors wheat"); }
+      if (features.season === 'winter') { score += 0.12; reasons.push("winter planting window"); }
+    }
+
+    if (crop === 'rice') {
+      if (features.ph >= 5.5 && features.ph <= 6.8) { score += 0.22; reasons.push("slightly acidic pH suits rice"); }
+      if (features.p > 35) { score += 0.18; reasons.push("good Phosphorus supports rice"); }
+      if (features.water === 'high') { score += 0.22; reasons.push("requires high water"); }
+      if (features.season === 'rainy') { score += 0.08; reasons.push("rainy season helps"); }
+    }
+
+    if (crop === 'maize') {
+      if (features.ph >= 5.5 && features.ph <= 7.5) { score += 0.18; reasons.push("wide pH tolerance"); }
+      if (features.n > 80) { score += 0.16; reasons.push("responsive to Nitrogen"); }
+      if (features.season === 'summer') { score += 0.08; reasons.push("summer planting common"); }
+    }
+
+    if (crop === 'millets') {
+      if (features.water === 'low' || features.water === 'moderate') { score += 0.3; reasons.push("drought tolerant (low water)"); }
+      if (features.ph >= 6 && features.ph <= 8) { score += 0.1; reasons.push("tolerant of neutral to alkaline pH"); }
+    }
+
+    if (crop === 'groundnut') {
+      if (features.p > 40) { score += 0.2; reasons.push("good Phosphorus supports legumes"); }
+      if (features.ph >= 5 && features.ph <= 6.5) { score += 0.14; reasons.push("slightly acidic favors groundnut"); }
+      if (features.k > 120) { score += 0.08; reasons.push("adequate Potassium helps pods"); }
+    }
+
+    if (crop === 'sorghum') {
+      if (features.water === 'low') { score += 0.22; reasons.push("sorghum tolerates drought"); }
+      if (features.ph >= 5.5 && features.ph <= 7.5) { score += 0.12; reasons.push("good general tolerance"); }
+    }
+
+    // penalty adjustments for very poor matches
+    if (features.ph < 4.8 || features.ph > 9) { score -= 0.25; reasons.push("extreme pH — reduces suitability"); }
+    if (features.n < 10 && crop === 'wheat') { score -= 0.12; reasons.push("very low Nitrogen reduces wheat yield"); }
+
+    // clamp
+    score = Math.max(0, Math.min(1, score));
+    return { score, reasons };
+  }
+
+  function recommendLocal(features) {
+    const scored = crops.map(c => {
+      const { score, reasons } = scoreForCrop(c.id, features);
+      return { crop: c.name, id: c.id, score, reasons };
+    });
+
+    // sort by score desc
+    scored.sort((a,b) => b.score - a.score);
+    // return top 3
+    return scored.slice(0,3);
+  }
+
+  // Helpers to render
+  function renderResults(list) {
+    const container = document.getElementById('results');
+    container.innerHTML = '';
+    list.forEach(item => {
+      const div = document.createElement('div');
+      div.className = 'result';
+      const sc = document.createElement('div');
+      sc.className = 'score';
+      sc.textContent = Math.round(item.score * 100) + '%';
+      const meta = document.createElement('div');
+      const title = document.createElement('h4');
+      title.className = 'crop-title';
+      title.textContent = item.crop;
+      const reason = document.createElement('p');
+      reason.className = 'reason';
+      reason.innerHTML = item.reasons.length ? item.reasons.slice(0,2).join('. ') + '.' : 'Primary factors: soil & water.';
+      meta.appendChild(title);
+      meta.appendChild(reason);
+      div.appendChild(sc);
+      div.appendChild(meta);
+      container.appendChild(div);
+    });
+  }
+
+  function runRecommendation() {
+    const n = parseFloat(document.getElementById('nitrogen').value || 0);
+    const p = parseFloat(document.getElementById('phosphorus').value || 0);
+    const k = parseFloat(document.getElementById('potassium').value || 0);
+    const ph = parseFloat(document.getElementById('ph').value || 6.5);
+    const water = document.getElementById('water').value;
+    const season = document.getElementById('season').value;
+
+    const features = { n, p, k, ph, water, season };
+    const recs = recommendLocal(features);
+
+    // add short explanation text
+    const explain = document.getElementById('explain');
+    explain.innerHTML = `<strong>Input summary:</strong> pH ${ph}, N ${n}, P ${p}, K ${k}, water: ${water}, season: ${season}.`;
+
+    renderResults(recs);
+  }
+
+  // Wire buttons
+  document.getElementById('runBtn').addEventListener('click', runRecommendation);
+  document.getElementById('clearBtn').addEventListener('click', () => {
+    document.getElementById('nitrogen').value = 120;
+    document.getElementById('phosphorus').value = 30;
+    document.getElementById('potassium').value = 180;
+    document.getElementById('ph').value = 6.2;
+    document.getElementById('water').value = 'moderate';
+    document.getElementById('season').value = 'summer';
+    document.getElementById('results').innerHTML = '';
+    document.getElementById('explain').innerHTML = '';
+  });
+
+  // run once on load for demo
+  runRecommendation();
+
+  // OPTIONAL: Example of how to call a backend ML API instead of local logic:
+  /*
+  async function callBackendAPI(features) {
+    const res = await fetch('https://your-backend.example.com/recommend', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(features)
+    });
+    const data = await res.json(); // expect [{crop, score, reason}, ...]
+    // render accordingly
+  }
+  */
+</script>
+</body>
+</html>
